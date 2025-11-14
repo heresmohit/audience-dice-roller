@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Audience Dice Roller</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      color: white;
+      padding: 20px;
+    }
+    
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 2rem;
+      text-align: center;
+    }
+    
+    #rollButton {
+      width: 200px;
+      height: 200px;
+      border-radius: 50%;
+      background: white;
+      color: #667eea;
+      font-size: 2rem;
+      font-weight: bold;
+      border: none;
+      cursor: pointer;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+      transition: transform 0.1s, box-shadow 0.1s;
+    }
+    
+    #rollButton:active {
+      transform: scale(0.95);
+      box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+    }
+    
+    #rollButton:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+    
+    #result {
+      margin-top: 2rem;
+      font-size: 3rem;
+      font-weight: bold;
+      min-height: 4rem;
+      text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+    }
+    
+    #status {
+      margin-top: 1rem;
+      font-size: 1rem;
+      opacity: 0.9;
+    }
+  </style>
+</head>
+<body>
+  <h1>🎲 Audience Dice Roller</h1>
+  
+  <button id="rollButton">ROLL<br>D20</button>
+  
+  <div id="result"></div>
+  <div id="status">Connecting...</div>
+  <div id="sessionDisplay"></div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const rollButton = document.getElementById('rollButton');
+    const resultDiv = document.getElementById('result');
+    const statusDiv = document.getElementById('status');
+
+    let canRoll = false;
+    let sessionId = null;
+
+    // Get or create session ID
+    function getSessionId() {
+      let id = localStorage.getItem('diceRollerSessionId');
+      console.log('Retrieved from localStorage:', id);
+      
+      if (!id) {
+        // Generate unique session ID
+        id = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
+        localStorage.setItem('diceRollerSessionId', id);
+        console.log('Created NEW session ID:', id);
+      } else {
+        console.log('Using EXISTING session ID:', id);
+      }
+      return id;
+    }
+
+    sessionId = getSessionId();
+    console.log('Final Session ID:', sessionId);
+    
+    // Display session ID on page (for debugging)
+    document.getElementById('sessionDisplay').textContent = 'Session: ' + sessionId.substr(0, 20) + '...';
+
+    // Connection status
+    socket.on('connect', () => {
+      statusDiv.textContent = 'Connected! Ready to roll';
+      canRoll = true;
+      rollButton.disabled = false;
+      
+      // Register session with server
+      socket.emit('register-session', { sessionId: sessionId });
+    });
+
+    socket.on('disconnect', () => {
+      statusDiv.textContent = 'Disconnected - reconnecting...';
+      canRoll = false;
+      rollButton.disabled = true;
+    });
+
+    // Roll button click
+    rollButton.addEventListener('click', () => {
+      if (!canRoll) return;
+
+      // Roll a d20
+      const result = Math.floor(Math.random() * 20) + 1;
+      
+      // Show result
+      resultDiv.textContent = `You rolled: ${result}`;
+      
+      // Special styling for nat 20
+      if (result === 20) {
+        resultDiv.style.color = '#FFD700';
+        resultDiv.textContent = `🎉 NAT 20! 🎉`;
+      } else if (result === 1) {
+        resultDiv.style.color = '#FF6B6B';
+      } else {
+        resultDiv.style.color = 'white';
+      }
+
+      // Send to server
+      socket.emit('roll-dice', { result: result });
+
+      // Disable button after rolling (one roll per round)
+      rollButton.disabled = true;
+      rollButton.textContent = 'ROLLED!';
+      rollButton.style.opacity = '0.6';
+    });
+
+    // Listen for round resets
+    socket.on('rolls-update', (stats) => {
+      if (stats.count === 0) {
+        resultDiv.textContent = '';
+      }
+    });
+  </script>
+</body>
+</html>

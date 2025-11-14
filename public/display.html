@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dice Display</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      font-family: Arial, sans-serif;
+      background: #1a1a2e;
+      color: white;
+      min-height: 100vh;
+      padding: 2rem;
+    }
+    
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    
+    h1 {
+      text-align: center;
+      font-size: 3rem;
+      margin-bottom: 2rem;
+      color: #667eea;
+    }
+    
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 2rem;
+      margin-bottom: 2rem;
+    }
+    
+    .stat-card {
+      background: rgba(102, 126, 234, 0.1);
+      border: 2px solid #667eea;
+      border-radius: 10px;
+      padding: 2rem;
+      text-align: center;
+    }
+    
+    .stat-label {
+      font-size: 1.2rem;
+      opacity: 0.8;
+      margin-bottom: 0.5rem;
+    }
+    
+    .stat-value {
+      font-size: 3rem;
+      font-weight: bold;
+      color: #667eea;
+    }
+    
+    .controls {
+      text-align: center;
+      margin-top: 2rem;
+    }
+    
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 1rem 2rem;
+      font-size: 1.2rem;
+      border-radius: 5px;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    
+    button:hover {
+      background: #5568d3;
+    }
+    
+    button:active {
+      transform: scale(0.98);
+    }
+    
+    #status {
+      text-align: center;
+      margin-top: 1rem;
+      opacity: 0.7;
+    }
+    
+    .rolls-list {
+      margin-top: 2rem;
+      padding: 1rem;
+      background: rgba(0,0,0,0.3);
+      border-radius: 10px;
+      max-height: 200px;
+      overflow-y: auto;
+    }
+    
+    .rolls-list h3 {
+      margin-bottom: 1rem;
+    }
+    
+    .roll-item {
+      display: inline-block;
+      margin: 0.25rem;
+      padding: 0.5rem 1rem;
+      background: rgba(102, 126, 234, 0.3);
+      border-radius: 5px;
+      font-size: 1.2rem;
+    }
+    
+    .roll-nat20 {
+      background: gold;
+      color: black;
+      font-weight: bold;
+    }
+    
+    .roll-nat1 {
+      background: #ff6b6b;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎲 AUDIENCE DICE ROLLER 🎲</h1>
+    
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Rolls</div>
+        <div class="stat-value" id="count">0</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Average</div>
+        <div class="stat-value" id="average">0</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Total</div>
+        <div class="stat-value" id="total">0</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Highest</div>
+        <div class="stat-value" id="highest">0</div>
+      </div>
+      
+      <div class="stat-card">
+        <div class="stat-label">Lowest</div>
+        <div class="stat-value" id="lowest">0</div>
+      </div>
+    </div>
+    
+    <div class="rolls-list">
+      <h3>Recent Rolls:</h3>
+      <div id="rollsList"></div>
+    </div>
+    
+    <div class="controls">
+      <button id="resetButton">RESET ROUND</button>
+    </div>
+    
+    <div id="status">Connecting...</div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const statusDiv = document.getElementById('status');
+    const resetButton = document.getElementById('resetButton');
+
+    // Connection status
+    socket.on('connect', () => {
+      statusDiv.textContent = '✓ Connected';
+    });
+
+    socket.on('disconnect', () => {
+      statusDiv.textContent = '✗ Disconnected';
+    });
+
+    // Update display when rolls come in
+    socket.on('rolls-update', (stats) => {
+      document.getElementById('count').textContent = stats.count;
+      document.getElementById('average').textContent = stats.average.toFixed(1);
+      document.getElementById('total').textContent = stats.total;
+      document.getElementById('highest').textContent = stats.highest || '-';
+      document.getElementById('lowest').textContent = stats.lowest || '-';
+      
+      // Display individual rolls
+      const rollsList = document.getElementById('rollsList');
+      if (stats.rolls.length === 0) {
+        rollsList.innerHTML = '<span style="opacity: 0.5">No rolls yet</span>';
+      } else {
+        rollsList.innerHTML = stats.rolls.map(roll => {
+          let className = 'roll-item';
+          if (roll === 20) className += ' roll-nat20';
+          if (roll === 1) className += ' roll-nat1';
+          return `<span class="${className}">${roll}</span>`;
+        }).join('');
+      }
+    });
+
+    // Reset button
+    resetButton.addEventListener('click', () => {
+      if (confirm('Reset this round? All rolls will be cleared.')) {
+        socket.emit('reset-round');
+      }
+    });
+  </script>
+</body>
+</html>
