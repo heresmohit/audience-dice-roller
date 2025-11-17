@@ -3,6 +3,7 @@ const express = require('express');
 const http = require('http');
 const path = require('path');
 const { Server } = require('socket.io');
+let calcMode = "mean"; // default mode 
 
 const app = express();
 const server = http.createServer(app);
@@ -14,7 +15,7 @@ const io = new Server(server, {
   }
 });
 
-const distPath = path.join(__dirname, '..', 'client', 'dist');
+const distPath = path.join(__dirname, '..', 'client', 'src');
 console.log("Serving frontend from:", distPath);
 
 app.use(express.static(distPath));
@@ -39,27 +40,55 @@ function calculateStats() {
       highest: 0,
       lowest: 0,
       rolls: [],
-      connectedCount
+      connectedCount,
+      calcMode,
+      computedResult: 0
     };
   }
 
   const results = currentRolls.map(r => r.result);
-  const total = results.reduce((sum, val) => sum + val, 0);
-  const average = total / results.length;
+  const total = results.reduce((sum, v) => sum + v, 0);
+  const average = Math.round((total / results.length)); // whole num  
   const highest = Math.max(...results);
   const lowest = Math.min(...results);
 
+  // --- NEW CALCULATION MODES ---
+  let computedResult = 0;
+
+  if (calcMode === "mean") {
+    computedResult = average;
+  }
+
+  else if (calcMode === "median") {
+    const sorted = [...results].sort((a,b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    computedResult = sorted.length % 2 === 0
+      ? Math.round((sorted[mid - 1] + sorted[mid]) / 2)
+      : sorted[mid];
+  }
+
+  else if (calcMode === "mode") {
+    const freq = {};
+    results.forEach(n => freq[n] = (freq[n] || 0) + 1);
+    const maxFreq = Math.max(...Object.values(freq));
+    const modes = Object.keys(freq).filter(k => freq[k] === maxFreq);
+    computedResult = Number(modes[0]); // pick first mode
+  }
+
   return {
     roundActive,
-    count: currentRolls.length,
+    count: results.length,
     total,
-    average: Math.round(average * 10) / 10,
+    average,
     highest,
     lowest,
     rolls: results,
-    connectedCount
+    connectedCount,
+    calcMode,
+    computedResult
   };
 }
+
 
 // Broadcast current state to all clients
 function broadcastState() {
@@ -115,6 +144,8 @@ io.on('connection', (socket) => {
     broadcastState();
   });
 
+
+
   // Handle roll from a client
   socket.on('roll-dice', (data) => {
     if (!sessionId) {
@@ -158,6 +189,35 @@ io.on('connection', (socket) => {
     // Broadcast connection count change
     broadcastState();
   });
+
+  socket.on('set-mode', (newMode) => {
+  if (typeof newMode === 'string') {
+    calcMode = newMode;
+    console.log("Calculation mode changed to:", newMode);
+    broadcastState(); // update everyone
+  }
+  });
+
+  socket.on('host-test-roll', (value) => {
+  if (!roundActive) return; // respect round rules
+
+  const rollValue = Number(value);
+  if (!Number.isFinite(rollValue)) return;
+
+  console.log("HOST TEST ROLL:", rollValue);
+
+  // Push a synthetic roll
+  currentRolls.push({
+    sessionId: "HOST_TEST",
+    result: rollValue,
+    timestamp: Date.now()
+  });
+
+  broadcastState();
+});
+
+
+
 });
 
 server.listen(PORT, () => {
