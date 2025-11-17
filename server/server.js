@@ -36,6 +36,10 @@ if (process.env.NODE_ENV === 'production') {
 let roundActive = false;
 let currentRolls = [];
 let usersWhoRolled = new Set(); // sessionId set
+// Map socket.id -> sessionId for per-socket session-registered emissions
+const socketSessionMap = new Map();
+// rollMode: 'normal' | 'advantage' | 'disadvantage'
+let rollMode = 'normal';
 
 const PORT = process.env.PORT || 3000;
 
@@ -97,6 +101,7 @@ function calculateStats() {
     rolls: results,
     connectedCount,
     calcMode,
+    rollMode,
     computedResult
   };
 }
@@ -122,10 +127,10 @@ io.on('connection', (socket) => {
     if (data && data.sessionId) {
       sessionId = data.sessionId;
       console.log(`Registered session ${sessionId} for socket ${socket.id}`);
-      // If they already rolled this round, inform them
-      if (usersWhoRolled.has(sessionId)) {
-        socket.emit('already-rolled', { message: 'You already rolled this round!' });
-      }
+      socketSessionMap.set(socket.id, sessionId);
+      // Inform the client whether this session has already rolled this round
+      const already = usersWhoRolled.has(sessionId);
+      socket.emit('session-registered', { hasRolled: already });
     }
   });
 
@@ -137,7 +142,16 @@ io.on('connection', (socket) => {
     // For "new round" semantics we usually clear rolls as well:
     currentRolls = [];
     usersWhoRolled.clear();
+    // Broadcast state and notify all sockets of their session status
     broadcastState();
+    // For each connected socket, inform whether that session has rolled (now all false)
+    for (const [sid, sess] of socketSessionMap.entries()) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) {
+        s.emit('session-registered', { hasRolled: usersWhoRolled.has(sess) });
+      }
+    }
+    io.emit('round-started');
   });
 
   // End a round (stop accepting rolls)
@@ -145,6 +159,14 @@ io.on('connection', (socket) => {
     console.log('end-round requested by', socket.id);
     roundActive = false;
     broadcastState();
+    // Notify clients of round end and update their session status
+    for (const [sid, sess] of socketSessionMap.entries()) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) {
+        s.emit('session-registered', { hasRolled: usersWhoRolled.has(sess) });
+      }
+    }
+    io.emit('round-ended');
   });
 
   // Reset round (clear rolls + reopen for new)
@@ -154,6 +176,13 @@ io.on('connection', (socket) => {
     currentRolls = [];
     usersWhoRolled.clear();
     broadcastState();
+    for (const [sid, sess] of socketSessionMap.entries()) {
+      const s = io.sockets.sockets.get(sid);
+      if (s) {
+        s.emit('session-registered', { hasRolled: usersWhoRolled.has(sess) });
+      }
+    }
+    io.emit('round-reset');
   });
 
 
@@ -167,12 +196,14 @@ io.on('connection', (socket) => {
 
     if (!roundActive) {
       socket.emit('round-inactive', { message: 'Round is not active. Wait for host to start the round.' });
+      socket.emit('roll-rejected', { reason: 'round-inactive', message: 'Round is not active.' });
       return;
     }
 
     // Prevent double-rolls per session
     if (usersWhoRolled.has(sessionId)) {
       socket.emit('already-rolled', { message: 'You already rolled this round!' });
+      socket.emit('roll-rejected', { reason: 'already-rolled', message: 'You already rolled this round.' });
       return;
     }
 
@@ -187,10 +218,15 @@ io.on('connection', (socket) => {
     currentRolls.push({
       sessionId,
       result: rollValue,
+      raw: Array.isArray(data && data.raw) ? data.raw : undefined,
       timestamp: Date.now()
     });
 
     usersWhoRolled.add(sessionId);
+
+    // Acknowledge the rolling socket that the roll was accepted
+    const stats = calculateStats();
+    socket.emit('roll-accepted', { result: rollValue, stats });
 
     broadcastState();
   });
@@ -199,6 +235,7 @@ io.on('connection', (socket) => {
     console.log('Socket disconnected:', socket.id, 'reason:', reason);
     // We do not remove usersWhoRolled entries on disconnect — sessionId is persistent in localStorage
     // Broadcast connection count change
+    socketSessionMap.delete(socket.id);
     broadcastState();
   });
 
@@ -208,6 +245,15 @@ io.on('connection', (socket) => {
     console.log("Calculation mode changed to:", newMode);
     broadcastState(); // update everyone
   }
+  });
+
+  // Set roll mode: 'normal' | 'advantage' | 'disadvantage'
+  socket.on('set-roll-mode', (mode) => {
+    if (typeof mode === 'string' && ['normal', 'advantage', 'disadvantage'].includes(mode)) {
+      rollMode = mode;
+      console.log('Roll mode changed to:', rollMode);
+      broadcastState();
+    }
   });
 
   socket.on('host-test-roll', (value) => {

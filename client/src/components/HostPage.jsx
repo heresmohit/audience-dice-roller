@@ -18,6 +18,7 @@ function HostPage() {
 
   const [status, setStatus] = useState('Connecting...');
   const [mode, setMode] = useState("mean");
+  const [rollMode, setRollMode] = useState('normal');
   const socketRef = useRef(null);
 
   const prettyName = {
@@ -42,6 +43,7 @@ function HostPage() {
     socket.on('rolls-update', (newStats) => {
       setStats(newStats);
       setMode(newStats.calcMode);
+      if (newStats.rollMode) setRollMode(newStats.rollMode);
     });
 
     socket.on('already-rolled', (msg) => {
@@ -79,6 +81,11 @@ function HostPage() {
     socketRef.current.emit('set-mode', newMode);
   };
 
+  const changeRollMode = (newMode) => {
+    setRollMode(newMode);
+    socketRef.current.emit('set-roll-mode', newMode);
+  };
+
   return (
     <div className="host-page">
       <div className="host-container">
@@ -107,6 +114,19 @@ function HostPage() {
             <option value="mean">Mean (Average)</option>
             <option value="median">Median</option>
             <option value="mode">Mode</option>
+          </select>
+        </div>
+
+        {/* ROLL MODE SELECTOR */}
+        <div className="mode-selector">
+          <label>Roll Mode:</label>
+          <select
+            value={rollMode}
+            onChange={(e) => changeRollMode(e.target.value)}
+          >
+            <option value="normal">Normal</option>
+            <option value="advantage">Advantage</option>
+            <option value="disadvantage">Disadvantage</option>
           </select>
         </div>
 
