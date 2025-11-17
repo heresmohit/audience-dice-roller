@@ -7,7 +7,7 @@ const server = http.createServer(app);
 const io = new Server(server);
 
 // Serve static files from 'public' folder
-app.use(express.static('public'));
+app.use(express.static('../client/dist'));
 
 // Store current round's rolls
 let currentRolls = [];
