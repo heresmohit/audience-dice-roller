@@ -23,7 +23,8 @@ if (process.env.NODE_ENV === 'production') {
   app.use(express.static(distPath));
 
   // SPA fallback so client-side routes like /display and /host return index.html
-  app.get('*', (req, res) => {
+  // Use '/*' pattern to be compatible with newer path-to-regexp used by Express
+  app.get('/*', (req, res) => {
     res.sendFile(path.join(distPath, 'index.html'));
   });
 } else {
