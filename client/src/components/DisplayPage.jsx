@@ -17,7 +17,8 @@ function DisplayPage() {
   };
 
   useEffect(() => {
-    socketRef.current = io();
+    const socketUrl = import.meta.env.VITE_SOCKET_URL ? import.meta.env.VITE_SOCKET_URL : undefined;
+    socketRef.current = io(socketUrl);
     const socket = socketRef.current;
 
     socket.on('connect', () => {

@@ -22,8 +22,9 @@ function RollerPage() {
     }
     sessionIdRef.current = id;
 
-    // Create socket connection
-    socketRef.current = io();
+    // Create socket connection (allow overriding via VITE_SOCKET_URL)
+    const socketUrl = import.meta.env.VITE_SOCKET_URL ? import.meta.env.VITE_SOCKET_URL : undefined;
+    socketRef.current = io(socketUrl);
     const socket = socketRef.current;
 
     // Socket event listeners

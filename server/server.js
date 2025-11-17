@@ -15,10 +15,21 @@ const io = new Server(server, {
   }
 });
 
-const distPath = path.join(__dirname, '..', 'client', 'src');
-console.log("Serving frontend from:", distPath);
+const distPath = path.join(__dirname, '..', 'client', 'dist');
+console.log("Frontend build path:", distPath);
 
-app.use(express.static(distPath));
+if (process.env.NODE_ENV === 'production') {
+  // Serve static built client in production
+  app.use(express.static(distPath));
+
+  // SPA fallback so client-side routes like /display and /host return index.html
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(distPath, 'index.html'));
+  });
+} else {
+  // In development we expect the Vite dev server to serve the client (fast HMR)
+  console.log('Development mode: run the client with `npm --prefix client run dev`');
+}
  
 // Server state (authoritative)
 let roundActive = false;
