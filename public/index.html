@@ -75,7 +75,6 @@
   
   <div id="result"></div>
   <div id="status">Connecting...</div>
-  <div id="sessionDisplay"></div>
 
   <script src="/socket.io/socket.io.js"></script>
   <script>
@@ -90,24 +89,16 @@
     // Get or create session ID
     function getSessionId() {
       let id = localStorage.getItem('diceRollerSessionId');
-      console.log('Retrieved from localStorage:', id);
       
       if (!id) {
         // Generate unique session ID
         id = 'session_' + Math.random().toString(36).substr(2, 9) + '_' + Date.now();
         localStorage.setItem('diceRollerSessionId', id);
-        console.log('Created NEW session ID:', id);
-      } else {
-        console.log('Using EXISTING session ID:', id);
       }
       return id;
     }
 
     sessionId = getSessionId();
-    console.log('Final Session ID:', sessionId);
-    
-    // Display session ID on page (for debugging)
-    document.getElementById('sessionDisplay').textContent = 'Session: ' + sessionId.substr(0, 20) + '...';
 
     // Connection status
     socket.on('connect', () => {
@@ -123,6 +114,17 @@
       statusDiv.textContent = 'Disconnected - reconnecting...';
       canRoll = false;
       rollButton.disabled = true;
+    });
+
+    // Handle already rolled message
+    socket.on('already-rolled', (data) => {
+      resultDiv.textContent = '⚠️ Already rolled this round!';
+      resultDiv.style.color = '#FFB347';
+      
+      // Clear message after 2 seconds
+      setTimeout(() => {
+        resultDiv.textContent = '';
+      }, 2000);
     });
 
     // Roll button click
@@ -147,17 +149,16 @@
 
       // Send to server
       socket.emit('roll-dice', { result: result });
-
-      // Disable button after rolling (one roll per round)
-      rollButton.disabled = true;
-      rollButton.textContent = 'ROLLED!';
-      rollButton.style.opacity = '0.6';
+      
+      // Button stays enabled - server will handle duplicate prevention
     });
 
     // Listen for round resets
     socket.on('rolls-update', (stats) => {
+      // Clear result display when round is reset
       if (stats.count === 0) {
         resultDiv.textContent = '';
+        resultDiv.style.color = 'white';
       }
     });
   </script>
