@@ -3,180 +3,180 @@ import { useState, useEffect, useRef } from 'react';
 import { io } from 'socket.io-client';
 import './HostPage.css';
 
-function HostPage() {
-  const [stats, setStats] = useState({
-    roundActive: false,
-    count: 0,
-    total: 0,
-    highest: 0,
-    lowest: 0,
-    rolls: [],
-    connectedCount: 0,
-    calcMode: "mean",
-    computedResult: 0
-  });
-
-  const [status, setStatus] = useState('Connecting...');
-  const [mode, setMode] = useState("mean");
-  const [rollMode, setRollMode] = useState('normal');
-  const socketRef = useRef(null);
-
-  const prettyName = {
-    mean: "Mean",
-    median: "Median",
-    mode: "Mode"
-  };
-
-  useEffect(() => {
-    const socketUrl = import.meta.env.VITE_SOCKET_URL ? import.meta.env.VITE_SOCKET_URL : undefined;
-    socketRef.current = io(socketUrl);
-    const socket = socketRef.current;
-
-    socket.on('connect', () => {
-      setStatus('Connected');
+  function HostPage() {
+    const [stats, setStats] = useState({
+      roundActive: false,
+      count: 0,
+      total: 0,
+      highest: 0,
+      lowest: 0,
+      rolls: [],
+      connectedCount: 0,
+      calcMode: "mean",
+      computedResult: 0
     });
 
-    socket.on('disconnect', () => {
-      setStatus('Disconnected');
-    });
+    const [status, setStatus] = useState('Connecting...');
+    const [mode, setMode] = useState("mean");
+    const [rollMode, setRollMode] = useState('normal');
+    const socketRef = useRef(null);
 
-    socket.on('rolls-update', (newStats) => {
-      setStats(newStats);
-      setMode(newStats.calcMode);
-      if (newStats.rollMode) setRollMode(newStats.rollMode);
-    });
-
-    socket.on('already-rolled', (msg) => {
-      console.warn('already-rolled:', msg);
-    });
-
-    socket.on('round-inactive', (msg) => {
-      console.warn('round-inactive:', msg);
-    });
-
-    return () => {
-      socket.off('connect');
-      socket.off('disconnect');
-      socket.off('rolls-update');
-      socket.disconnect();
+    const prettyName = {
+      mean: "Mean",
+      median: "Median",
+      mode: "Mode"
     };
-  }, []);
 
-  const startRound = () => socketRef.current.emit('start-round');
-  const endRound = () => socketRef.current.emit('end-round');
-  const resetRound = () => {
-    if (window.confirm('Reset round and clear all rolls?')) {
-      socketRef.current.emit('reset-round');
-    }
-  };
+    useEffect(() => {
+      const socketUrl = import.meta.env.VITE_SOCKET_URL ? import.meta.env.VITE_SOCKET_URL : undefined;
+      socketRef.current = io(socketUrl);
+      const socket = socketRef.current;
 
-  // Optional: host test roll
-  const hostTestRoll = () => {
-  const roll = Math.floor(Math.random() * 20) + 1;
-  socketRef.current.emit('host-test-roll', roll);
-  };
+      socket.on('connect', () => {
+        setStatus('Connected');
+      });
 
-  const changeMode = (newMode) => {
-    setMode(newMode);
-    socketRef.current.emit('set-mode', newMode);
-  };
+      socket.on('disconnect', () => {
+        setStatus('Disconnected');
+      });
 
-  const changeRollMode = (newMode) => {
-    setRollMode(newMode);
-    socketRef.current.emit('set-roll-mode', newMode);
-  };
+      socket.on('rolls-update', (newStats) => {
+        setStats(newStats);
+        setMode(newStats.calcMode);
+        if (newStats.rollMode) setRollMode(newStats.rollMode);
+      });
 
-  return (
-    <div className="host-page">
-      <div className="host-container">
-        <h1>Host Dashboard — Audience Dice Roller</h1>
+      socket.on('already-rolled', (msg) => {
+        console.warn('already-rolled:', msg);
+      });
 
-        <div className="host-top">
-          <div className="host-status">Status: <strong>{status}</strong></div>
-          <div className="host-connections">Connected: <strong>{stats.connectedCount}</strong></div>
-          <div className="host-round">Round Active: <strong>{stats.roundActive ? 'Yes' : 'No'}</strong></div>
-        </div>
+      socket.on('round-inactive', (msg) => {
+        console.warn('round-inactive:', msg);
+      });
 
-        <div className="controls">
-          <button onClick={startRound}>Start Round</button>
-          <button onClick={endRound}>End Round</button>
-          <button onClick={resetRound}>Reset Round</button>
-          <button onClick={hostTestRoll}>Host Test Roll</button>
-        </div>
+      return () => {
+        socket.off('connect');
+        socket.off('disconnect');
+        socket.off('rolls-update');
+        socket.disconnect();
+      };
+    }, []);
 
-        {/* MODE SELECTOR */}
-        <div className="mode-selector">
-          <label>Calculation Mode:</label>
-          <select 
-            value={mode}
-            onChange={(e) => changeMode(e.target.value)}
-          >
-            <option value="mean">Mean (Average)</option>
-            <option value="median">Median</option>
-            <option value="mode">Mode</option>
-          </select>
-        </div>
+    const startRound = () => socketRef.current.emit('start-round');
+    const endRound = () => socketRef.current.emit('end-round');
+    const resetRound = () => {
+      if (window.confirm('Reset round and clear all rolls?')) {
+        socketRef.current.emit('reset-round');
+      }
+    };
 
-        {/* ROLL MODE SELECTOR */}
-        <div className="mode-selector">
-          <label>Roll Mode:</label>
-          <select
-            value={rollMode}
-            onChange={(e) => changeRollMode(e.target.value)}
-          >
-            <option value="normal">Normal</option>
-            <option value="advantage">Advantage</option>
-            <option value="disadvantage">Disadvantage</option>
-          </select>
-        </div>
+    // Optional: host test roll
+    const hostTestRoll = () => {
+      const roll = Math.floor(Math.random() * 20) + 1;
+      socketRef.current.emit('host-test-roll', roll);
+    };
 
-        {/* STATS GRID */}
-        <div className="stats-grid">
+    const changeMode = (newMode) => {
+      setMode(newMode);
+      socketRef.current.emit('set-mode', newMode);
+    };
 
-          {/* NEW RESULT CARD */}
-          <div className="stat">
-            <div className="label">Result ({prettyName[stats.calcMode]})</div>
-            <div className="value">{stats.computedResult}</div>
+    const changeRollMode = (newMode) => {
+      setRollMode(newMode);
+      socketRef.current.emit('set-roll-mode', newMode);
+    };
+
+    return (
+      <div className="host-page">
+        <div className="host-container">
+          <h1>Host Dashboard — Audience Dice Roller</h1>
+
+          <div className="host-top">
+            <div className="host-status">Status: <strong>{status}</strong></div>
+            <div className="host-connections">Connected: <strong>{stats.connectedCount}</strong></div>
+            <div className="host-round">Round Active: <strong>{stats.roundActive ? 'Yes' : 'No'}</strong></div>
           </div>
 
-          <div className="stat">
-            <div className="label">Total Rolls</div>
-            <div className="value">{stats.count}</div>
+          <div className="controls">
+            <button onClick={startRound}>Start Round</button>
+            <button onClick={endRound}>End Round</button>
+            <button onClick={resetRound}>Reset Round</button>
+            <button onClick={hostTestRoll}>Host Test Roll</button>
           </div>
 
-          <div className="stat">
-            <div className="label">Highest</div>
-            <div className="value">{stats.highest || "—"}</div>
+          {/* MODE SELECTOR */}
+          <div className="mode-selector">
+            <label>Calculation Mode:</label>
+            <select 
+              value={mode}
+              onChange={(e) => changeMode(e.target.value)}
+            >
+              <option value="mean">Mean (Average)</option>
+              <option value="median">Median</option>
+              <option value="mode">Mode</option>
+            </select>
           </div>
 
-          <div className="stat">
-            <div className="label">Lowest</div>
-            <div className="value">{stats.lowest || "—"}</div>
+          {/* ROLL MODE SELECTOR */}
+          <div className="mode-selector">
+            <label>Roll Mode:</label>
+            <select
+              value={rollMode}
+              onChange={(e) => changeRollMode(e.target.value)}
+            >
+              <option value="normal">Normal</option>
+              <option value="advantage">Advantage</option>
+              <option value="disadvantage">Disadvantage</option>
+            </select>
           </div>
-        </div>
 
-        {/* ROLLS LIST */}
-        <div className="rolls-section">
-          <h3>Recent Rolls</h3>
-          <div className="rolls-list">
-            {stats.rolls && stats.rolls.length ? (
-              stats.rolls.slice().reverse().map((r, i) => (
-                <div key={i} className="roll-item">{r}</div>
-              ))
-            ) : (
-              <div className="roll-empty">No rolls yet</div>
-            )}
+          {/* STATS GRID */}
+          <div className="stats-grid">
+
+            {/* NEW RESULT CARD */}
+            <div className="stat">
+              <div className="label">Result ({prettyName[stats.calcMode]})</div>
+              <div className="value">{stats.computedResult}</div>
+            </div>
+
+            <div className="stat">
+              <div className="label">Total Rolls</div>
+              <div className="value">{stats.count}</div>
+            </div>
+
+            <div className="stat">
+              <div className="label">Highest</div>
+              <div className="value">{stats.highest || "—"}</div>
+            </div>
+
+            <div className="stat">
+              <div className="label">Lowest</div>
+              <div className="value">{stats.lowest || "—"}</div>
+            </div>
           </div>
-        </div>
 
-        <div className="note">
-          <small>
-            /display will show only the final result based on your selected mode.
-          </small>
+          {/* ROLLS LIST */}
+          <div className="rolls-section">
+            <h3>Recent Rolls</h3>
+            <div className="rolls-list">
+              {stats.rolls && stats.rolls.length ? (
+                stats.rolls.slice().reverse().map((r, i) => (
+                  <div key={i} className="roll-item">{r}</div>
+                ))
+              ) : (
+                <div className="roll-empty">No rolls yet</div>
+              )}
+            </div>
+          </div>
+
+          <div className="note">
+            <small>
+              /display will show only the final result based on your selected mode.
+            </small>
+          </div>
         </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
 export default HostPage;

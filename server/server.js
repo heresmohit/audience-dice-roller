@@ -2,8 +2,65 @@
 const express = require('express');
 const http = require('http');
 const path = require('path');
+// Load local .env in development so `process.env.HOST_PASS` etc. are available.
+// We point to the repository root .env (one level up from server/).
+try {
+  require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
+} catch (e) {
+  // ignore if dotenv isn't installed or .env not present
+}
+const crypto = require('crypto');
 const { Server } = require('socket.io');
 let calcMode = "mean"; // default mode 
+
+// Host credentials (set via env vars). In production ensure these are provided and
+// that the server is behind TLS so Basic Auth credentials aren't exposed in plain text.
+const HOST_USER = process.env.HOST_USER || '';
+const HOST_PASS = process.env.HOST_PASS || '';
+// Host token used for authenticating socket connections. If not provided, falls
+// back to HOST_PASS (not ideal for rotation; providing a separate token is recommended).
+const HOST_TOKEN = process.env.HOST_TOKEN || HOST_PASS;
+
+// No in-memory token issuance anymore; socket host auth will only check
+// the configured `HOST_TOKEN` environment variable.
+
+// Timing-safe comparison helper
+function safeEquals(a, b) {
+  try {
+    const ab = Buffer.from(String(a));
+    const bb = Buffer.from(String(b));
+    if (ab.length !== bb.length) return false;
+    return crypto.timingSafeEqual(ab, bb);
+  } catch (e) {
+    return false;
+  }
+}
+
+// Basic Auth middleware for protecting the host UI routes
+function basicAuth(req, res, next) {
+  if (!HOST_PASS) {
+    // If password isn't configured, treat as service unavailable rather than allow open access
+    return res.status(503).send('Host auth not configured');
+  }
+
+  const auth = req.headers['authorization'];
+  if (!auth || !auth.startsWith('Basic ')) {
+    res.setHeader('WWW-Authenticate', 'Basic realm="Host"');
+    return res.status(401).send('Authentication required');
+  }
+
+  const b = Buffer.from(auth.split(' ')[1] || '', 'base64').toString('utf8');
+  const idx = b.indexOf(':');
+  // Accept any username, only validate the password to keep the browser prompt UX simple
+  const pass = idx >= 0 ? b.slice(idx + 1) : '';
+
+  if (safeEquals(pass, HOST_PASS)) {
+    return next();
+  }
+
+  res.setHeader('WWW-Authenticate', 'Basic realm="Host"');
+  return res.status(401).send('Authentication required');
+}
 
 const app = express();
 const server = http.createServer(app);
@@ -18,19 +75,26 @@ const io = new Server(server, {
 const distPath = path.join(__dirname, '..', 'client', 'dist');
 console.log("Frontend build path:", distPath);
 
-if (process.env.NODE_ENV === 'production') {
-  // Serve static built client in production
-  app.use(express.static(distPath));
+// Always serve the built client `client/dist` from this server (so port 3000
+// serves the SPA). Enforce Basic Auth for `/host` routes in all environments.
+app.use('/host', basicAuth, express.static(distPath));
 
-  // SPA fallback so client-side routes like /display and /host return index.html
-  // Use a middleware fallback to avoid route parsing issues with path-to-regexp
-  app.use((req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
-} else {
-  // In development we expect the Vite dev server to serve the client (fast HMR)
-  console.log('Development mode: run the client with `npm --prefix client run dev`');
-}
+// Serve static built client for all routes
+app.use(express.static(distPath));
+
+// SPA fallback so client-side routes like /display and /host return index.html
+// For requests that start with /host we must enforce Basic Auth before
+// returning the index.html so that client-side routing doesn't bypass auth.
+app.use((req, res) => {
+  if (req.path && req.path.startsWith('/host')) {
+    return basicAuth(req, res, () => res.sendFile(path.join(distPath, 'index.html')));
+  }
+  return res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// NOTE: token issuance/login endpoint removed — using simple Basic Auth and static
+// HOST_TOKEN for socket host actions. If you need a token exchange later,
+// reintroduce an endpoint here.
  
 // Server state (authoritative)
 let roundActive = false;
@@ -115,6 +179,10 @@ function broadcastState() {
 
 io.on('connection', (socket) => {
   console.log('Socket connected:', socket.id);
+
+  // Socket connections are not gated by a handshake token. Host UI is
+  // protected by Basic Auth (HTTP) — sockets assume the client is allowed
+  // to perform actions if it can access the host UI.
 
   // Immediately send current state to the newly connected client
   socket.emit('rolls-update', calculateStats());
