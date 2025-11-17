@@ -48,11 +48,32 @@ function RollerPage() {
       }, 2000);
     });
 
+
     socket.on('rolls-update', (stats) => {
-      if (stats.count === 0) {
+            // Clear result if new round / no rolls
+        if (stats.count === 0) {
+            setResult('');
+            setResultColor('white');
+        }
+
+        // New: disable rolling when round is inactive
+        if (!stats.roundActive) {
+            setCanRoll(false);
+            setStatus('Waiting for host to start a round...');
+        } else {
+            setCanRoll(true);
+            setStatus('Connected! Ready to roll');
+        }
+    });
+
+    socket.on('round-inactive', () => {
+    setResult('Round not active yet!');
+    setResultColor('#FFB347');
+
+    setTimeout(() => {
         setResult('');
         setResultColor('white');
-      }
+    }, 2000);
     });
 
     // Cleanup on unmount
@@ -85,6 +106,8 @@ function RollerPage() {
     socketRef.current.emit('roll-dice', { result: roll });
   };
 
+    
+
   return (
     <div className="roller-page">
       <h1>🎲 Audience Dice Roller</h1>
@@ -104,6 +127,9 @@ function RollerPage() {
       <div className="status">{status}</div>
     </div>
   );
+
+
+  
 }
 
 export default RollerPage;

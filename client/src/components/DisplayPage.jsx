@@ -33,7 +33,14 @@ function DisplayPage() {
     });
 
     socket.on('rolls-update', (newStats) => {
-      setStats(newStats);
+        setStats(newStats);
+
+        // Update connection status label nicely
+        if (!newStats.roundActive) {
+            setStatus('⏳ Waiting for host to start round');
+        } else {
+            setStatus('✓ Round Active');
+        }
     });
 
     // Cleanup on unmount
@@ -75,6 +82,14 @@ function DisplayPage() {
     <div className="display-page">
       <div className="container">
         <h1>🎲 AUDIENCE DICE ROLLER 🎲</h1>
+
+        <div className="round-status">
+        {stats.roundActive ? (
+            <div className="round-on">🟢 Round Active</div>
+        ) : (
+            <div className="round-off">⚪ Waiting for next round</div>
+        )}
+        </div>
         
         <div className="stats-grid">
           <div className="stat-card">
