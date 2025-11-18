@@ -1,0 +1,53 @@
+* {
+  box-sizing: border-box;
+}
+
+#hexGrid {
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+#uiLayer {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+}
+
+.hexagon {
+  fill: none;
+  stroke: url(#hexGrad);
+  stroke-width: 2;
+  opacity: 0.95;
+  transform-origin: center center;
+  transform-box: fill-box;
+}
+
+/* The big number */
+#centerText {
+  pointer-events: none;
+  fill: #ff79a8;
+  font-size: 40px;
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: middle;
+  transition: transform .2s ease, opacity .2s ease;
+}
+
+#centerText.roll-anim {
+  opacity: 0.6;
+}
+
+#centerText.result {
+  opacity: 1;
+  transform: none;
+}
+
+/* flipping animation */
+#centerHex.flip {
+  transform: rotateY(180deg);
+  transition: transform .6s ease;
+  transform-origin: center center;
+  transform-box: fill-box;
+}
