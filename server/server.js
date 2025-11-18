@@ -252,7 +252,11 @@ io.on('connection', (socket) => {
     }
     io.emit('round-reset');
   });
-
+  // Reveal result (Host triggers Display animations)
+  socket.on('reveal-result', () => {
+    console.log('Host requested result reveal');
+    io.emit('reveal-result');
+  });
 
 
   // Handle roll from a client

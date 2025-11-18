@@ -86,6 +86,10 @@ import './HostPage.css';
       socketRef.current.emit('set-roll-mode', newMode);
     };
 
+    const revealResult = () => {
+        socketRef.current.emit('reveal-result');
+    };
+
     return (
       <div className="host-page">
         <div className="host-container">
@@ -102,6 +106,7 @@ import './HostPage.css';
             <button onClick={endRound}>End Round</button>
             <button onClick={resetRound}>Reset Round</button>
             <button onClick={hostTestRoll}>Host Test Roll</button>
+            <button onClick={revealResult}>Reveal Result</button>
           </div>
 
           {/* MODE SELECTOR */}
